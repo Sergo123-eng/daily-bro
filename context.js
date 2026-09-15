@@ -1,0 +1,50 @@
+// Local intent matching for the portfolio demo; no remote model or message upload.
+export function understand(input='',defaults={}){
+ const text=input.toLowerCase().replace(/[’‘]/g,"'").replace(/\b(?:dont|don t)\b/g,"don't").replace(/\b(?:cant|can t)\b/g,"can't").replace(/\boverwhelm\w*\b/g,'overwhelmed').replace(/\banxios\b/g,'anxious').replace(/\bstress(?:ed|ful|ing)?\b/g,'stress');
+ const has=r=>r.test(text);const solo=has(/(?:want|need|prefer|rather).{0,20}(?:alone|solo|myself)|(?:don't|do not|not in the mood to|can't|no energy to).{0,15}(?:sociali[sz]e|talk|meet|see people)|no (?:social|people|talking)/);
+ const noGym=has(/no (?:gym|workout|exercise)|(?:don't|do not|can't|cannot|not).{0,18}(?:gym|work ?out|exercise)|rest day/);
+ const indoors=has(/at home|stay(?:ing)? (?:home|inside|indoors)|(?:don't|do not|can't|cannot).{0,15}(?:outside|go out|leave)|rain(?:ing)?|indoors/);
+ const campus=has(/on campus|at (?:college|university|school)|student club/)&&!indoors;
+ const noFriends=has(/no friends|don't have (?:any )?friends|do not have (?:any )?friends|don't know anyone|new (?:here|student|city)/);
+ const sleep=has(/can't sleep|cannot sleep|sleepy|bedtime|go to bed|wind down|insomnia/);
+ const overwhelm=has(/overwhelmed|stress|anxious|anxiety|panic|burnt? ?out|too much|nervous/);
+ const tired=has(/tired|exhaust|drained|no energy|low energy|worn out/);
+ const fun=has(/\b(?:fun|bored|boring|hobby|hobbies|enjoy|activity|activities)\b/);
+ const work=has(/\b(?:work|working|study|studying|exam|deadline|assignment|homework)\b/);
+ const social=!solo&&has(/lonely|loneliness|isolated|haven't spoken|not spoken|make friends|meet people|social|club|compliment|smile|no friends|don't know anyone/);
+ const gym=!noGym&&has(/\b(?:gym|workout|exercise|training|fitness|weights|muscle|work out)\b/);
+ const injury=has(/\b(?:injur\w*|pain|hurts?|dizzy|dizziness|faint|sprain\w*)\b/)&&!has(/\b(?:no pain|pain free|pain-free|not hurt)\b/);
+ const crisis=has(/kill myself|end my life|suicid\w*|hurt myself/);
+ let budget=Number(defaults.minutes)||20;
+ const words={one:1,two:2,three:3,five:5,ten:10,fifteen:15,twenty:20,thirty:30};
+ const time=text.match(/\b(\d{1,3}|one|two|three|five|ten|fifteen|twenty|thirty)\s*(?:minutes?|mins?)\b/);
+ if(time)budget=Math.max(1,Math.min(60,Number(time[1])||words[time[1]]));
+ const focus=crisis?'support':injury?'rest':sleep?'sleep':overwhelm?'calm':tired?'rest':social?'connection':gym?'movement':fun?'fun':work?'work':solo?'solo':null;
+ return {text,solo,noGym,indoors,campus,noFriends,sleep,overwhelm,tired,fun,work,social,gym,injury,crisis,budget,focus,low:tired||defaults.energy==='low',setting:indoors?'home':campus?'campus':defaults.setting||'campus',recognized:!!focus||indoors||noGym||!!time};
+}
+const item=(id,category,title,body,duration,tags,easyTitle,easyBody)=>({id,category,title,body,duration,tags,easyTitle,easyBody});
+export const focusedActions=[
+ item('doodle','reset','Doodle, with no end goal.','Grab any scrap of paper and draw loops, shapes, or a ridiculous little character. Spend five minutes making something that does not need to be good.',5,['calm','fun','solo','rest'],'Draw one silly shape.','Use any scrap of paper to draw a silly shape for one minute. No judging or fixing it.'),
+ item('listen','reset','Put on one calming song.','Choose a familiar song that feels comforting. Sit somewhere comfortable and listen without scrolling or trying to get something done.',4,['calm','fun','solo','rest'],'Listen for one minute.','Play a comforting song and listen for a minute. There is nothing to finish.'),
+ item('notice','reset','Give your attention a softer place.','Sit by a window or somewhere comfortable. Notice three colors, two sounds, and one detail you usually miss. No need to force yourself to feel different.',3,['calm','solo','rest'],'Notice one detail.','Spend a quiet minute noticing a color or sound around you.'),
+ item('read-fun','reset','Read something just for fun.','Pick a comic, a poem, or a few pages of a book you enjoy. Skip study material for this little pocket of time.',6,['fun','solo','calm'],'Read one page.','Read a single page or short poem for pleasure. You can stop there.'),
+ item('sleep-landing','reset','Make a gentle landing for bedtime.','Put your work aside and dim the screen or room lights if comfortable. Choose a quiet, familiar activity instead of starting another task.',5,['sleep','rest','solo'],'Put work away for tonight.','Close your work and set your phone aside for one quiet minute.'),
+ item('sleep-note','reset','Park tomorrow on paper.','Write down the one thing you want to remember tomorrow. Leave the note where you will find it so you can stop rehearsing it tonight.',3,['sleep','work','calm'],'Write one reminder.','Write one short reminder for tomorrow, then put the note aside.'),
+ item('desk-boundary','reset','Pause the work, not your whole life.','Write down the next tiny step for your task. Close it for a few minutes and choose a comfortable pause before returning.',4,['work','calm'],'Leave yourself a bookmark.','Write your next work step in one line and take one minute away from it.'),
+ item('indoor-move','movement','Change the scenery indoors.','Take a comfortable walk or roll around your room, or change position by a window. Leave your task at the desk for this short break.',5,['movement','work','fun','solo'],'Move to a different spot.','Spend a minute in another comfortable spot in your room. Moving more is optional.'),
+ item('club-find','connection','Find one place to meet people.','Look in your campus club directory for an interest you already have. Check an actual meeting date and whether newcomers can attend. You do not need to know anyone first.',7,['connection','campus','new-people'],'Find one welcoming club.','Look up one club that welcomes newcomers. Save its name; attending can come later.'),
+ item('community-find','connection','Start with a shared interest.','Check a local library or community-center listing for a free group you might enjoy. Verify the real date and newcomer details before making plans.',6,['connection','new-people'],'Find one free group.','Look up one free interest group through a library or community center. Just save the listing for now.'),
+ item('new-hello','connection','Prepare an easy first hello.','For a group you decide to visit, try: “Hey, I’m new here. How did you get into this?” You can keep the exchange short and give the other person space.',3,['connection','new-people'],'Try the words privately.','Say or write one low-pressure introduction: “Hi, I’m new here.” There is no need to send anything yet.'),
+ item('friend-invite','connection','Make the invitation small.','Ask someone you know: “Want to take a short walk or catch up sometime this week?” Suggest a time together only if they are interested.',4,['connection'],'Send one warm hello.','Send someone you know a short hello. No immediate reply is required.'),
+ item('compliment','connection','Make the compliment specific.','Notice a genuine effort or choice: “I liked how clearly you explained that,” or “That’s a great notebook.” Say it once, warmly, without expecting a conversation.',3,['connection','kindness'],'Write one sincere compliment.','Write one sentence about an effort or choice you genuinely appreciate. Use it only if a natural moment comes up.'),
+ item('gym-easy','movement','Choose an easy, familiar session.','Pick a movement you already know and find comfortable. Start gently, take breaks, and leave room to stop early. You do not need to beat a previous session.',10,['movement','gym'],'Try one comfortable minute.','Try a minute of a familiar, comfortable activity. Stop if it hurts; doing more is optional.'),
+ item('gym-setup','movement','Make starting feel smaller.','Set out what you need for a comfortable movement break and pick one familiar activity. If you need an equipment demonstration, ask staff before using it.',3,['movement','gym'],'Set out one thing.','Set out your shoes or another item that makes your next movement break easier.'),
+ item('quiet-rest','reset','Let this be a rest break.','Get into a comfortable position and leave the workout or task alone for a few minutes. Choose a quiet pause with no performance target.',5,['rest','solo','sleep','calm'],'Take one minute off.','Rest in a comfortable position for a minute. Nothing else is required.')
+];
+export function contextNote(p){
+ if(p.crisis)return 'Your safety matters more than a daily plan. Reach out to a trusted person or local crisis support now; use emergency services if you may act on these thoughts.';
+ if(p.injury)return 'You mentioned discomfort or injury. These are rest activities, not an assessment or exercise prescription. Ask a qualified clinician about activity that is safe for you.';
+ const notes={calm:'You mentioned feeling overwhelmed or stressed. Start with one calming activity; socializing and exercise are optional.',sleep:'You asked about winding down. These ideas keep the pace quiet and leave work for later.',rest:'You mentioned low energy or needing rest. These suggestions keep the effort small.',connection:p.noFriends?'You want connection and may not know people yet. These steps do not assume you already have a friend to message.':'You asked for connection. These steps keep it specific and low-pressure.',movement:'You asked for movement. These ideas use familiar, comfortable activity.',fun:'You asked for an enjoyable activity. These ideas make room for fun without turning it into work.',work:'Work is on your mind. These steps help you put it down briefly and return with a clear starting point.',solo:'You want time to yourself. These suggestions do not ask you to contact anyone.'};
+ let note=notes[p.focus]|| (p.text&&!p.recognized?'I couldn’t confidently match that request. These are general ideas; try describing whether you want rest, fun, movement, or connection.':'A starting point, not a scorecard. Pick what fits and change what doesn’t.');
+ if(p.indoors)note+=' Keeping it indoors.';if(p.noGym)note+=' No workout suggestions.';return note;
+}

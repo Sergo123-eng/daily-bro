@@ -1,3 +1,5 @@
+import {understand,focusedActions,contextNote} from './context.js?v=2';
+export {understand,contextNote} from './context.js?v=2';
 export const DEFAULTS={mode:'daily',energy:'okay',minutes:20,setting:'campus',equipment:'none'};
 const action=(id,category,title,body,duration,easyTitle,easyBody)=>({id,category,title,body,duration,easyTitle,easyBody});
 export const library={
@@ -7,21 +9,63 @@ reset:[action('shutdown','reset','Give work a finish line.','Write down your nex
 gym:[action('gym-walk','movement','Make showing up enough.','Take an easy walk, roll, or comfortable movement break. If you are at the gym, choose a familiar, easy activity. You should feel free to stop early.',10,'Start with two minutes.','Try two minutes of comfortable movement. Decide afterward whether you want more.'),action('gym-session','movement','Keep the session familiar.','Use comfortable movements you already know. Start easy, take breaks, and finish before you feel drained. If equipment is unfamiliar, ask gym staff to show you.',20,'Keep it light.','Take a short, easy movement break instead of a full session. No need to push today.'),action('gym-prepare','movement','Lower the starting barrier.','Set out your shoes and water, choose a familiar activity, and pick a realistic time. Planning counts today; the session can happen when you have room.',5,'Put out your shoes.','Set out one thing that makes your next movement break easier.')],
 recovery:[action('recover','reset','Leave room to recover.','After moving, slow down and take a comfortable seated break. Notice how you feel. Rest is part of looking after yourself.',5,'Sit. Breathe. Reset.','Take a quiet minute in a comfortable position.'),action('gym-boundary','reset','Skip the comparison.','Choose one thing to appreciate about showing up, regardless of distance, weight, or appearance. Write it down and let the session be enough.',3,'Count showing up.','Write: “I made a little room for myself today.”')]
 };
-export function makePlan(checkin,context='',rotation=0){
- const c={...DEFAULTS,...checkin};const text=context.toLowerCase();const budget=[10,20,45,60].includes(Number(c.minutes))?Number(c.minutes):20;const low=c.energy==='low';
- let move=c.mode==='gym'?library.gym[(low||budget===10)?0:c.equipment==='gym'?1:0]:library.movement[(low?1:rotation)%3];
- let people=c.setting==='campus'&&!low&&budget>=20?library.connection[0]:library.connection[1];
- if(/lonely|alone|friend|spoken|social/.test(text))people=library.connection[1];
- if(/club|campus/.test(text)&&budget>=20&&!low)people=library.connection[0];
- let rest=c.mode==='gym'?library.recovery[rotation%2]:library.reset[/work|study|studying|exam|deadline|overwhelm/.test(text)?0:rotation%3];
- if(rotation>0){people=library.connection[(rotation+(c.setting==='campus'?0:1))%4];if(c.setting!=='campus'&&people.id==='club')people=library.connection[1];}
- let list=[move,people,rest].map(x=>({...x,done:false,easy:false,reason:reason(x,c)}));
- if(low)list=list.map(easier);
- while(list.reduce((n,x)=>n+x.duration,0)>budget){const idx=list.findIndex(x=>!x.easy);if(idx<0)break;list[idx]=easier(list[idx]);}
- return list;
+function candidates(c,p){
+ const defaults=p.focus?[]:(c.mode==='gym'?library.gym:library.movement).concat(library.connection, c.mode==='gym'?library.recovery:library.reset).map(a=>({...a,tags:[]}));
+ const pool=[...focusedActions,...defaults];
+ return pool.filter(a=>{
+  if((p.solo||p.sleep||p.injury||p.crisis||p.focus==='calm'||p.focus==='rest')&&a.category==='connection')return false;
+  if((p.noGym||p.sleep||p.injury||p.crisis||p.focus==='calm'||p.focus==='rest')&&a.category==='movement')return false;
+  if(a.tags.includes('campus')&&p.setting!=='campus')return false;
+  if(a.id==='community-find'&&p.setting==='campus')return false;
+  if(p.noFriends&&['friend-invite','friend','smile'].includes(a.id))return false;
+  if(p.indoors&&['walk','gym-walk','smile','kind','friend-invite'].includes(a.id))return false;
+  if(a.tags.includes('gym')&&!(p.gym||c.mode==='gym'))return false;
+  if(p.noGym&&a.tags.includes('gym'))return false;
+  return true;
+ }).map((a,i)=>{
+  let score=0;
+  if(p.focus&&a.tags.includes(p.focus))score+=30;
+  if(p.fun&&a.tags.includes('fun'))score+=12;
+  if(p.work&&a.tags.includes('work')&&!p.fun)score+=6;
+  if(p.noFriends&&a.tags.includes('new-people'))score+=15;
+  if(/compliment|smile/.test(p.text)&&a.id==='compliment')score+=40;
+  if(/club/.test(p.text)&&a.id==='club-find')score+=40;
+  if(/music|song/.test(p.text)&&a.id==='listen')score+=40;
+  if(/draw|doodle|sketch/.test(p.text)&&a.id==='doodle')score+=40;
+  if(p.focus==='calm'&&['doodle','listen','notice'].includes(a.id))score+=10;
+  if(!p.focus){if(['walk','friend','shutdown'].includes(a.id))score+=10;if(c.mode==='gym'&&a.tags.includes('gym'))score+=12;}
+  return {...a,score,order:i};
+ }).sort((a,b)=>b.score-a.score||a.order-b.order);
 }
-function reason(x,c){if(c.energy==='low')return 'You said your energy is low. Keep the starting point small.';if(x.id==='club')return 'You selected campus. This helps you find a real opportunity without inventing an event.';if(x.category==='movement')return c.mode==='gym'?'A manageable start, using activity that already feels familiar.':'A change of pace after time at a screen.';if(x.category==='connection')return 'Connection can start with one small, respectful gesture.';return 'Your day deserves a pause that is not another assignment.';}
-export function easier(x){return {...x,title:x.easyTitle,body:x.easyBody,duration:Math.min(x.duration,2),easy:true,done:false};}
-export function swapAction(x,c,used=[]){const pool=x.category==='movement'?(c.mode==='gym'?library.gym:library.movement):x.category==='connection'?library.connection:(c.mode==='gym'?library.recovery:library.reset);let next=pool[(pool.findIndex(v=>v.id===x.id)+1)%pool.length];if(next.id==='club'&&c.setting!=='campus')next=library.connection[1];const allowed=Number(c.minutes)-used.filter(a=>a!==x).reduce((n,a)=>n+a.duration,0);const item={...next,reason:reason(next,c),done:false,easy:false};return c.energy==='low'||item.duration>allowed?easier(item):item;}
-export function guidedReply(text,c,plan){const t=text.toLowerCase();if(/pain|injur|chest|dizz|faint/.test(t))return 'Let’s pause the workout idea. I can’t assess symptoms or injuries. Choose rest and ask a qualified clinician about safe activity; if symptoms are severe or urgent, seek immediate medical help.';if(/suicid|kill myself|end my life|hurt myself/.test(t))return 'I’m sorry you’re feeling this much pain. Please reach out to someone you trust who can stay with you. If you might act on these thoughts, contact local emergency services or a crisis service now. This demo cannot provide crisis care.';if(/tired|overwhelm|exhaust|too much|easier/.test(t))return `Then let’s make the day smaller. Try just this: ${plan[2]?.easyBody||'Take one quiet minute away from your screen.'} Use “Make it easier” on any card. You can leave the other steps for another day.`;if(/gym|workout|exercise/.test(t))return 'Switch to Gym Bro and choose your energy, time, and equipment. Keep movement familiar and comfortable. Showing up for a small session is enough; you do not need to turn every visit into a personal record.';if(/club|friend|lonely|social|compliment|smile/.test(t))return 'Pick one low-pressure connection: message someone you know, or check a club’s real meeting details. If you compliment someone, make it sincere and about their effort or choice. A short exchange counts; they do not owe you a conversation.';if(/work|study|guilt|deadline|break/.test(t))return 'Write down your next work step so it has a place to wait. Then take the break on your plan. You can care about your goals and still make room for yourself today.';return `Start with “${plan[0]?.title||'Take one small step'}” if it fits. Or choose the card that feels easiest. These are guided demo replies; for a new plan, add a little context in the check-in above and press “Find my next small steps.”`;}
+function prepared(a,p){const {tags,score,order,...base}=a;return {...base,done:false,easy:false,reason:p.focus?contextNote({...p,indoors:false,noGym:false}):reason(a,{energy:p.low?'low':'okay'}),match:{...p,text:''}};}
+function fit(list,budget,low){let result=low?list.map(easier):list;while(result.reduce((n,a)=>n+a.duration,0)>budget){const i=result.findIndex(a=>!a.easy);if(i<0)break;result[i]=easier(result[i]);}return result;}
+export function makePlan(checkin,context='',rotation=0){
+ const c={...DEFAULTS,...checkin},p=understand(context,c);let ranked=candidates(c,p);
+ // Text relevance remains stable on rebuild; only Swap changes a recommendation.
+ const count=Math.min(3,Math.max(1,Math.floor(p.budget)));
+ const chosen=[];
+ if(!p.focus){for(const category of ['movement','connection','reset']){const item=ranked.find(a=>a.category===category&&!chosen.includes(a));if(item)chosen.push(item);}}
+ for(const a of ranked){if(chosen.length>=count)break;if(!chosen.includes(a))chosen.push(a);}
+ return fit(chosen.slice(0,count).map(a=>prepared(a,p)),p.budget,p.low);
+}
+function reason(x,c){if(c.energy==='low')return 'You selected low energy. Keep the starting point small.';return x.category==='connection'?'A small, respectful way to make room for connection.':x.category==='movement'?'A manageable change of pace.':'A pause that does not need to become another assignment.';}
+export function easier(x){return {...x,title:x.easyTitle,body:x.easyBody.replace(/two minutes/gi,'one minute'),duration:1,easy:true,done:false};}
+export function swapAction(x,c,used=[],context=''){
+ const p=context?understand(context,c):x.match||understand('',c);const pool=candidates(c,p).filter(a=>!used.some(u=>u.id===a.id));
+ if(!pool.length)return x;
+ const available=p.budget-used.filter(a=>a!==x).reduce((n,a)=>n+a.duration,0);
+ const item=prepared(pool[0],p);return p.low||item.duration>available?easier(item):item;
+}
+export function guidedReply(text,c,plan,priorContext=''){
+ const p=understand(text,c);
+ if(p.crisis)return 'I’m sorry you’re feeling this much pain. Please reach out to someone you trust who can stay with you. If you might act on these thoughts, contact local emergency services or a crisis service now. This demo cannot provide crisis care.';
+ if(p.injury)return 'Let’s pause the workout idea. I can’t assess symptoms or injuries. Choose rest and ask a qualified clinician about safe activity; if symptoms are severe or urgent, seek immediate medical help.';
+ if(/^(?:hi|hello|hey)[!. ]*$/.test(p.text))return 'Hey. What would help right now: a calming activity, something fun, movement, or a way to connect? Tell me how much time you have, too.';
+ if(/\b(?:easier|too much|smaller|simpler)\b/.test(p.text)&&plan.length){const a=easier(plan[0]);return `Let’s shrink the first step: ${a.body} One minute is enough. You can ignore the other cards for now.`;}
+ const combined=priorContext?`${priorContext}. ${text}`:text;
+ const match=understand(combined,c);
+ if(!p.recognized&&!/another|different|instead|indoors|outside/.test(p.text))return 'I’m not sure I understood that specific request. Would you like a calming activity, something fun, a movement break, or a way to meet people? Include any limits, such as “at home, five minutes, no talking.”';
+ const options=makePlan(c,combined);const first=options[0];
+ return `${contextNote(match)}\n\nTry this (${first.duration} min): ${first.title} ${first.body}\n\n${options[1]?`Another option: ${options[1].title} ${options[1].body}`:'That can be your whole break.'}\n\nUse “Use this conversation for my plan” below to update the cards.`;
+}
 export function calendarEvent(action,start){const d=new Date(start);if(Number.isNaN(d.getTime()))throw Error('Choose a valid date and time.');const stamp=v=>v.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Daily Bro//Small steps//EN','BEGIN:VEVENT',`UID:${crypto.randomUUID()}@daily-bro`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${stamp(d)}`,`DTEND:${stamp(new Date(d.getTime()+action.duration*60000))}`,`SUMMARY:${escape(action.title)}`,`DESCRIPTION:${escape(action.body+' Personal reminder only; no event booking.')}`,'END:VEVENT','END:VCALENDAR'].join('\r\n');}
