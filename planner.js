@@ -1,5 +1,5 @@
-import {understand,focusedActions,contextNote} from './context.js?v=2';
-export {understand,contextNote} from './context.js?v=2';
+import {understand,focusedActions,contextNote} from './context.js?v=3';
+export {understand,contextNote} from './context.js?v=3';
 export const DEFAULTS={mode:'daily',energy:'okay',minutes:20,setting:'campus',equipment:'none'};
 const action=(id,category,title,body,duration,easyTitle,easyBody)=>({id,category,title,body,duration,easyTitle,easyBody});
 export const library={
@@ -56,13 +56,19 @@ export function swapAction(x,c,used=[],context=''){
  const available=p.budget-used.filter(a=>a!==x).reduce((n,a)=>n+a.duration,0);
  const item=prepared(pool[0],p);return p.low||item.duration>available?easier(item):item;
 }
+// A new topic replaces the old request. Short constraints refine it instead.
+export function conversationRequest(previous,latest,c={}){
+ const p=understand(latest,c);
+ if(p.focus||!previous)return latest;
+ return p.recognized||/another|different|instead|easier|smaller|simpler|no talking|no music/.test(p.text)?`${previous}. ${latest}`:latest;
+}
 export function guidedReply(text,c,plan,priorContext=''){
  const p=understand(text,c);
  if(p.crisis)return 'I’m sorry you’re feeling this much pain. Please reach out to someone you trust who can stay with you. If you might act on these thoughts, contact local emergency services or a crisis service now. This demo cannot provide crisis care.';
  if(p.injury)return 'Let’s pause the workout idea. I can’t assess symptoms or injuries. Choose rest and ask a qualified clinician about safe activity; if symptoms are severe or urgent, seek immediate medical help.';
  if(/^(?:hi|hello|hey)[!. ]*$/.test(p.text))return 'Hey. What would help right now: a calming activity, something fun, movement, or a way to connect? Tell me how much time you have, too.';
  if(/\b(?:easier|too much|smaller|simpler)\b/.test(p.text)&&plan.length){const a=easier(plan[0]);return `Let’s shrink the first step: ${a.body} One minute is enough. You can ignore the other cards for now.`;}
- const combined=priorContext?`${priorContext}. ${text}`:text;
+ const combined=conversationRequest(priorContext,text,c);
  const match=understand(combined,c);
  if(!p.recognized&&!/another|different|instead|indoors|outside/.test(p.text))return 'I’m not sure I understood that specific request. Would you like a calming activity, something fun, a movement break, or a way to meet people? Include any limits, such as “at home, five minutes, no talking.”';
  const options=makePlan(c,combined);const first=options[0];

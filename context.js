@@ -11,7 +11,7 @@ export function understand(input='',defaults={}){
  const tired=has(/tired|exhaust|drained|no energy|low energy|worn out/);
  const fun=has(/\b(?:fun|bored|boring|hobby|hobbies|enjoy|activity|activities)\b/);
  const work=has(/\b(?:work|working|study|studying|exam|deadline|assignment|homework)\b/);
- const social=!solo&&has(/lonely|loneliness|isolated|haven't spoken|not spoken|make friends|meet people|social|club|compliment|smile|no friends|don't know anyone/);
+ const social=!solo&&has(/lonely|loneliness|isolated|haven't spoken|not spoken|make friends|meet people|sociable|outgoing|shy|shyness|social|club|compliment|smile|no friends|don't know anyone/);
  const gym=!noGym&&has(/\b(?:gym|workout|exercise|training|fitness|weights|muscle|work out)\b/);
  const injury=has(/\b(?:injur\w*|pain|hurts?|dizzy|dizziness|faint|sprain\w*)\b/)&&!has(/\b(?:no pain|pain free|pain-free|not hurt)\b/);
  const crisis=has(/kill myself|end my life|suicid\w*|hurt myself/);
